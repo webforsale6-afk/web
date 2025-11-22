@@ -1,8 +1,15 @@
+// ------------------------------
+// IMPORTS
+// ------------------------------
 import express from "express";
 import multer from "multer";
 import cors from "cors";
 import { v2 as cloudinary } from "cloudinary";
+import serverless from "serverless-http";
 
+// ------------------------------
+// EXPRESS SETUP
+// ------------------------------
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -54,8 +61,15 @@ const uploadToCloudinary = (fileBuffer, user) => {
 };
 
 // ------------------------------
-// 1) UPLOAD PDF
+// ROUTES
 // ------------------------------
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", message: "Server is running", timestamp: new Date().toISOString() });
+});
+
+// Upload PDF
 app.post("/upload/:user", adminAuth, upload.single("file"), async (req, res) => {
   try {
     const user = req.params.user.toLowerCase();
@@ -79,19 +93,14 @@ app.post("/upload/:user", adminAuth, upload.single("file"), async (req, res) => 
       resource_type: uploaded.resource_type
     };
 
-    return res.json({ 
-      message: "File uploaded successfully", 
-      report: report 
-    });
+    return res.json({ message: "File uploaded successfully", report });
   } catch (err) {
     console.error("UPLOAD ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// ------------------------------
-// 2) DOWNLOAD LATEST FILE - GURDEEP
-// ------------------------------
+// Download latest file for Gurdeep
 app.get("/download/gurdeep", async (req, res) => {
   try {
     const result = await cloudinary.search
@@ -101,35 +110,20 @@ app.get("/download/gurdeep", async (req, res) => {
       .execute();
 
     const files = result.resources;
+    if (!files || files.length === 0) return res.status(404).json({ error: "No files found" });
 
-    if (!files || files.length === 0)
-      return res.status(404).json({ error: "No files found in downloads folder" });
-
-    // Filter files containing "gurdeep" in public_id
-    const gurdeepFiles = files.filter(file => 
-      file.public_id.toLowerCase().includes('gurdeep')
-    );
-
-    if (gurdeepFiles.length === 0)
-      return res.status(404).json({ error: "No file found for Gurdeep" });
+    const gurdeepFiles = files.filter(file => file.public_id.toLowerCase().includes('gurdeep'));
+    if (!gurdeepFiles.length) return res.status(404).json({ error: "No file found for Gurdeep" });
 
     const latest = gurdeepFiles[0];
-    const downloadUrl = `${latest.secure_url}?fl_attachment`;
-
-    return res.json({ 
-      downloadUrl,
-      fileName: latest.public_id,
-      uploadedAt: latest.created_at
-    });
+    return res.json({ downloadUrl: `${latest.secure_url}?fl_attachment`, fileName: latest.public_id, uploadedAt: latest.created_at });
   } catch (err) {
     console.error("DOWNLOAD GURDEEP ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// ------------------------------
-// 3) DOWNLOAD LATEST FILE - KULWINDER
-// ------------------------------
+// Download latest file for Kulwinder
 app.get("/download/kulwinder", async (req, res) => {
   try {
     const result = await cloudinary.search
@@ -139,38 +133,22 @@ app.get("/download/kulwinder", async (req, res) => {
       .execute();
 
     const files = result.resources;
+    if (!files || files.length === 0) return res.status(404).json({ error: "No files found" });
 
-    if (!files || files.length === 0)
-      return res.status(404).json({ error: "No files found in downloads folder" });
-
-    // Filter files containing "kulwinder" in public_id
-    const kulwinderFiles = files.filter(file => 
-      file.public_id.toLowerCase().includes('kulwinder')
-    );
-
-    if (kulwinderFiles.length === 0)
-      return res.status(404).json({ error: "No file found for Kulwinder" });
+    const kulwinderFiles = files.filter(file => file.public_id.toLowerCase().includes('kulwinder'));
+    if (!kulwinderFiles.length) return res.status(404).json({ error: "No file found for Kulwinder" });
 
     const latest = kulwinderFiles[0];
-    const downloadUrl = `${latest.secure_url}?fl_attachment`;
-
-    return res.json({ 
-      downloadUrl,
-      fileName: latest.public_id,
-      uploadedAt: latest.created_at
-    });
+    return res.json({ downloadUrl: `${latest.secure_url}?fl_attachment`, fileName: latest.public_id, uploadedAt: latest.created_at });
   } catch (err) {
     console.error("DOWNLOAD KULWINDER ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// ------------------------------
-// 4) DELETE ALL FILES
-// ------------------------------
+// Delete all files
 app.delete("/delete-all", adminAuth, async (req, res) => {
   try {
-    // Search all files in downloads folder
     const result = await cloudinary.search
       .expression('folder:downloads')
       .sort_by("created_at", "desc")
@@ -178,33 +156,18 @@ app.delete("/delete-all", adminAuth, async (req, res) => {
       .execute();
 
     const files = result.resources;
+    if (!files || files.length === 0) return res.status(404).json({ error: "No files to delete" });
 
-    if (!files || files.length === 0)
-      return res.status(404).json({ error: "No files to delete" });
+    await Promise.all(files.map(file => cloudinary.uploader.destroy(file.public_id, { resource_type: "raw", invalidate: true })));
 
-    // Delete all files
-    const deletePromises = files.map(file => 
-      cloudinary.uploader.destroy(file.public_id, { 
-        resource_type: "raw",
-        invalidate: true 
-      })
-    );
-
-    await Promise.all(deletePromises);
-
-    return res.json({
-      message: "All files deleted successfully",
-      deletedCount: files.length,
-    });
+    return res.json({ message: "All files deleted successfully", deletedCount: files.length });
   } catch (err) {
     console.error("DELETE ALL ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// ------------------------------
-// 5) GET ALL REPORTS (Optional - for debugging)
-// ------------------------------
+// Get all reports (optional)
 app.get("/reports", async (req, res) => {
   try {
     const result = await cloudinary.search
@@ -214,21 +177,13 @@ app.get("/reports", async (req, res) => {
       .execute();
 
     const files = result.resources;
-
-    // Organize files by user
     const organized = {
       gurdeep: files.filter(f => f.public_id.toLowerCase().includes('gurdeep')),
       kulwinder: files.filter(f => f.public_id.toLowerCase().includes('kulwinder')),
-      other: files.filter(f => 
-        !f.public_id.toLowerCase().includes('gurdeep') && 
-        !f.public_id.toLowerCase().includes('kulwinder')
-      )
+      other: files.filter(f => !f.public_id.toLowerCase().includes('gurdeep') && !f.public_id.toLowerCase().includes('kulwinder'))
     };
 
-    return res.json({
-      totalFiles: files.length,
-      ...organized
-    });
+    return res.json({ totalFiles: files.length, ...organized });
   } catch (err) {
     console.error("REPORTS ERROR:", err);
     return res.status(500).json({ error: err.message });
@@ -236,37 +191,31 @@ app.get("/reports", async (req, res) => {
 });
 
 // ------------------------------
-// 6) HEALTH CHECK
-// ------------------------------
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "OK", 
-    message: "Server is running",
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ------------------------------
-// ERROR HANDLING MIDDLEWARE
+// ERROR HANDLING
 // ------------------------------
 app.use((err, req, res, next) => {
   console.error("Unhandled Error:", err);
-  res.status(500).json({ 
-    error: "Internal server error",
-    message: err.message 
+  res.status(500).json({ error: "Internal server error", message: err.message });
+});
+
+app.use((req, res) => res.status(404).json({ error: "Route not found" }));
+
+// ------------------------------
+// NETLIFY SERVERLESS WRAPPER
+// ------------------------------
+const router = express.Router();
+router.get("/", (req, res) => res.send("App is running.."));
+app.use("/.netlify/functions/app", router);
+
+export const handler = serverless(app);
+
+// ------------------------------
+// LOCAL SERVER (Optional for local testing)
+// ------------------------------
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} 🚀`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
   });
-});
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
-});
-
-// ------------------------------
-// START SERVER
-// ------------------------------
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} 🚀`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-});
+}
