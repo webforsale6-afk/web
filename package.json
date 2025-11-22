@@ -5,18 +5,16 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "multer": "^2.0.2",
-    "netlify-cli": "^23.11.1",
-    "netlify-lambda": "^2.0.16",
-    "serverless-http": "^4.0.0"
+    "nodemon": "^3.1.11"
+
   },
   "name": "server",
   "version": "1.0.0",
   "main": "server.js",
-     "type": "module",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "build": "netlify deploy --prod"
+    "start": "nodemon server.js"
   },
   "keywords": [],
   "author": "",
