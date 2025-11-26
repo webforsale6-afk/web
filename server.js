@@ -2,6 +2,8 @@ import express from "express";
 import multer from "multer";
 import cors from "cors";
 import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(cors());
@@ -28,6 +30,33 @@ const adminAuth = (req, res, next) => {
   const pass = req.headers["admin-password"];
   if (pass === ADMIN_PASSWORD) return next();
   return res.status(401).json({ error: "Unauthorized" });
+};
+
+// File path for storing names
+const NAMES_FILE = path.join(process.cwd(), 'saved_names.json');
+
+// Helper function to read names from file
+const readNamesFromFile = () => {
+  try {
+    if (fs.existsSync(NAMES_FILE)) {
+      const data = fs.readFileSync(NAMES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error('Error reading names file:', error);
+  }
+  return { name1: "", name2: "" }; // Default empty names
+};
+
+// Helper function to write names to file
+const writeNamesToFile = (names) => {
+  try {
+    fs.writeFileSync(NAMES_FILE, JSON.stringify(names, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error writing names file:', error);
+    return false;
+  }
 };
 
 // Upload PDF to Cloudinary
@@ -145,7 +174,68 @@ app.get("/name", async (req, res) => {
 });
 
 // ------------------------------
-// 3) DOWNLOAD LATEST FILE - GURDEEP
+// 3) NAMES API - GET & POST
+// ------------------------------
+app.route("/api/names")
+  // GET - Retrieve saved names
+  .get(adminAuth, (req, res) => {
+    try {
+      const names = readNamesFromFile();
+      res.json({
+        success: true,
+        names: names
+      });
+    } catch (error) {
+      console.error("GET NAMES ERROR:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to retrieve names" 
+      });
+    }
+  })
+  // POST - Save names
+  .post(adminAuth, (req, res) => {
+    try {
+      const { name1, name2 } = req.body;
+
+      if (!name1 || !name2) {
+        return res.status(400).json({
+          success: false,
+          error: "Both name1 and name2 are required"
+        });
+      }
+
+      const names = {
+        name1: name1.trim(),
+        name2: name2.trim(),
+        lastUpdated: new Date().toISOString()
+      };
+
+      const success = writeNamesToFile(names);
+
+      if (success) {
+        res.json({
+          success: true,
+          message: "Names saved successfully",
+          names: names
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: "Failed to save names"
+        });
+      }
+    } catch (error) {
+      console.error("POST NAMES ERROR:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to save names"
+      });
+    }
+  });
+
+// ------------------------------
+// 4) DOWNLOAD LATEST FILE - GURDEEP
 // ------------------------------
 app.get("/download/gurdeep", async (req, res) => {
   try {
@@ -183,7 +273,7 @@ app.get("/download/gurdeep", async (req, res) => {
 });
 
 // ------------------------------
-// 4) DOWNLOAD LATEST FILE - KULWINDER
+// 5) DOWNLOAD LATEST FILE - KULWINDER
 // ------------------------------
 app.get("/download/kulwinder", async (req, res) => {
   try {
@@ -221,7 +311,7 @@ app.get("/download/kulwinder", async (req, res) => {
 });
 
 // ------------------------------
-// 5) DELETE ALL FILES
+// 6) DELETE ALL FILES
 // ------------------------------
 app.delete("/delete-all", adminAuth, async (req, res) => {
   try {
@@ -258,7 +348,7 @@ app.delete("/delete-all", adminAuth, async (req, res) => {
 });
 
 // ------------------------------
-// 6) GET ALL REPORTS (Optional - for debugging)
+// 7) GET ALL REPORTS (Optional - for debugging)
 // ------------------------------
 app.get("/reports", async (req, res) => {
   try {
@@ -291,7 +381,7 @@ app.get("/reports", async (req, res) => {
 });
 
 // ------------------------------
-// 7) HEALTH CHECK
+// 8) HEALTH CHECK
 // ------------------------------
 app.get("/health", (req, res) => {
   res.json({ 
@@ -324,4 +414,10 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT} 🚀`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  
+  // Initialize names file if it doesn't exist
+  if (!fs.existsSync(NAMES_FILE)) {
+    writeNamesToFile({ name1: "", name2: "" });
+    console.log("Names file initialized");
+  }
 });
