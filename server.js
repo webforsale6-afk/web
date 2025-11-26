@@ -347,6 +347,24 @@ app.delete("/delete-all", adminAuth, async (req, res) => {
   }
 });
 
+
+app.get("/public/names", async (req, res) => {
+  try {
+    const names = readNamesFromFile();
+    res.json({
+      success: true,
+      names: names
+    });
+  } catch (error) {
+    console.error("GET PUBLIC NAMES ERROR:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Failed to retrieve names" 
+    });
+  }
+});
+
+
 // ------------------------------
 // 7) GET ALL REPORTS (Optional - for debugging)
 // ------------------------------
