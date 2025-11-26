@@ -53,6 +53,16 @@ const uploadToCloudinary = (fileBuffer, user) => {
   });
 };
 
+// Helper function to extract name from filename
+const extractNameFromFilename = (filename) => {
+  // Remove the "_report.pdf" part and get the name before it
+  if (filename && typeof filename === 'string') {
+    const match = filename.match(/^(.+)_report\.pdf$/i);
+    return match ? match[1] : null;
+  }
+  return null;
+};
+
 // ------------------------------
 // 1) UPLOAD PDF
 // ------------------------------
@@ -90,7 +100,52 @@ app.post("/upload/:user", adminAuth, upload.single("file"), async (req, res) => 
 });
 
 // ------------------------------
-// 2) DOWNLOAD LATEST FILE - GURDEEP
+// 2) GET NAME FROM UPLOADED PDF
+// ------------------------------
+app.get("/name", async (req, res) => {
+  try {
+    const result = await cloudinary.search
+      .expression('folder:downloads AND resource_type:raw')
+      .sort_by("created_at", "desc")
+      .max_results(50)
+      .execute();
+
+    const files = result.resources;
+
+    if (!files || files.length === 0)
+      return res.status(404).json({ error: "No PDF files found" });
+
+    // Extract names from all PDF files
+    const pdfNames = files
+      .filter(file => file.public_id.toLowerCase().endsWith('.pdf'))
+      .map(file => {
+        const filename = file.public_id.split('/').pop(); // Get just the filename part
+        const name = extractNameFromFilename(filename);
+        return {
+          originalFilename: filename,
+          extractedName: name,
+          uploadedAt: file.created_at,
+          secure_url: file.secure_url
+        };
+      })
+      .filter(item => item.extractedName !== null); // Filter out files that don't match the pattern
+
+    if (pdfNames.length === 0)
+      return res.status(404).json({ error: "No properly named PDF files found" });
+
+    return res.json({
+      totalPdfFiles: pdfNames.length,
+      names: pdfNames
+    });
+
+  } catch (err) {
+    console.error("GET NAME ERROR:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------------------
+// 3) DOWNLOAD LATEST FILE - GURDEEP
 // ------------------------------
 app.get("/download/gurdeep", async (req, res) => {
   try {
@@ -128,7 +183,7 @@ app.get("/download/gurdeep", async (req, res) => {
 });
 
 // ------------------------------
-// 3) DOWNLOAD LATEST FILE - KULWINDER
+// 4) DOWNLOAD LATEST FILE - KULWINDER
 // ------------------------------
 app.get("/download/kulwinder", async (req, res) => {
   try {
@@ -166,7 +221,7 @@ app.get("/download/kulwinder", async (req, res) => {
 });
 
 // ------------------------------
-// 4) DELETE ALL FILES
+// 5) DELETE ALL FILES
 // ------------------------------
 app.delete("/delete-all", adminAuth, async (req, res) => {
   try {
@@ -203,7 +258,7 @@ app.delete("/delete-all", adminAuth, async (req, res) => {
 });
 
 // ------------------------------
-// 5) GET ALL REPORTS (Optional - for debugging)
+// 6) GET ALL REPORTS (Optional - for debugging)
 // ------------------------------
 app.get("/reports", async (req, res) => {
   try {
@@ -236,7 +291,7 @@ app.get("/reports", async (req, res) => {
 });
 
 // ------------------------------
-// 6) HEALTH CHECK
+// 7) HEALTH CHECK
 // ------------------------------
 app.get("/health", (req, res) => {
   res.json({ 
