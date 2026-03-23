@@ -22,7 +22,7 @@ cloudinary.config({
 
 // ======= MONGOOSE SETUP =======
 mongoose
-  .connect("mongodb+srv://webforsale6_db_user:123123123@cluster0.tf1grcl.mongodb.netzzz")
+  .connect("mongodb+srv://webforsale6_db_user:123123123@cluster0.tf1grcl.mongodb.net/?appName=Cluster0")
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
